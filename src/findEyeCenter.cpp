@@ -151,7 +151,7 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
   // Note: these loops are reversed from the way the paper does them
   // it evaluates every possible center for each gradient location instead of
   // every possible gradient location for every center.
-  printf("Eye Size: %ix%i\n",outSum.cols,outSum.rows);
+  // printf("Eye Size: %ix%i\n",outSum.cols,outSum.rows);
   for (int y = 0; y < weight.rows; ++y) {
     const double *Xr = gradientX.ptr<double>(y), *Yr = gradientY.ptr<double>(y);
     for (int x = 0; x < weight.cols; ++x) {
@@ -166,7 +166,7 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
   double numGradients = (weight.rows*weight.cols);
   cv::Mat out;
   outSum.convertTo(out, CV_32F,1.0/numGradients);
-  //imshow(debugWindow,out);
+  // imshow(debugWindow,out);
   //-- Find the maximum point
   cv::Point maxP;
   double maxVal;
@@ -182,8 +182,8 @@ cv::Point findEyeCenter(cv::Mat face, cv::Rect eye, std::string debugWindow) {
       imwrite("eyeFrame.png",eyeROIUnscaled);
     }
     cv::Mat mask = floodKillEdges(floodClone);
-    //imshow(debugWindow + " Mask",mask);
-    //imshow(debugWindow,out);
+    // imshow(debugWindow + " Mask",mask);
+    // imshow(debugWindow,out);
     // redo max
     cv::minMaxLoc(out, NULL,&maxVal,NULL,&maxP,mask);
   }
