@@ -1,8 +1,5 @@
 #include "PacketHandler.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
 PacketHandler::PacketHandler(int port)
 {
 	WSADATA wsaData;
@@ -21,10 +18,6 @@ PacketHandler::~PacketHandler()
 
 void PacketHandler::PrepareSocket(int port)
 {
-	m_address.sin_family = AF_INET;
-	m_address.sin_port = htons(port);
-	m_address.sin_addr.s_addr = INADDR_ANY;
-
 	m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (m_socket == SOCKET_ERROR)
 	{
@@ -32,7 +25,12 @@ void PacketHandler::PrepareSocket(int port)
 		exit(0);
 	}
 
-	bind(m_socket, (const sockaddr*)(&m_address), sizeof(m_address));
+	sockaddr_in serv_address;
+	serv_address.sin_family = AF_INET;
+	serv_address.sin_port = htons(port);
+	serv_address.sin_addr.s_addr = INADDR_ANY;
+
+	bind(m_socket, (const sockaddr*)(&serv_address), sizeof(serv_address));
 
 	setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, "1", 1);
 	// DWORD dwBytesReturned = 0;
@@ -40,10 +38,10 @@ void PacketHandler::PrepareSocket(int port)
 	// WSAIoctl(m_socket, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL);
 }
 
-std::vector<std::vector<char>> PacketHandler::ReceivePackets()
+std::vector<std::string> PacketHandler::ReceivePackets()
 {
-	std::vector<std::vector<char>> receivedData;
-	char buffer[10000];
+	std::vector<std::string> receivedData;
+	static char buffer[10000];
 
 	int waiting;
 	do
@@ -54,28 +52,22 @@ std::vector<std::vector<char>> PacketHandler::ReceivePackets()
 		struct timeval t;
 		t.tv_sec = 0;
 		t.tv_usec = 0;
-		waiting = select(0, &checksockets, nullptr, nullptr, &t);
+		waiting = select(m_socket, &checksockets, nullptr, nullptr, &t);
 		if (waiting > 0)
 		{
 			int result;
-			int length = sizeof(m_address);
-			result = recvfrom(m_socket,	buffer, 10000, 0, (SOCKADDR*)&m_address, &length);
+			int length = sizeof(sockaddr_in);
+			result = recvfrom(m_socket,	buffer, 10000, 0, (SOCKADDR*)&m_prevrecv, &length);
 
 			if (result == SOCKET_ERROR)
 			{
-				std::cout << "recvfrom() failed: Error " << WSAGetLastError() << std::endl;
+				auto err = WSAGetLastError();
+				if(err != WSAECONNRESET)
+					std::cout << "recvfrom() failed: Error " << err << std::endl;
 			}
 			else
 			{
-				std::vector<char> packetData;
-
-				int i = 0;
-				while (buffer[i] != (char)-52) // This is bad, not sure how to check for empty
-				{
-					packetData.push_back(buffer[i]);
-					i++;
-				}
-
+				std::string packetData(buffer, result);
 				receivedData.push_back(packetData);
 			}
 		}

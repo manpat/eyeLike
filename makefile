@@ -4,10 +4,13 @@ LIBS += -lzlib -lgdi32 -lole32 -loleaut32 -luuid -lvfw32
 
 LIBDIR=-L$(shell cygpath -w /usr/local/lib)
 INCLUDE=-I$(shell cygpath -w /usr/local/include)
-SRC=$(shell find src -name "*.cpp")
+SRC=$(shell /usr/bin/find src -name "*.cpp")
 OBJ=$(SRC:%.cpp=%.o)
 
-.PHONY: build run
+.PHONY: pbuild build run
+
+pbuild:
+	@make -j 4 build
 
 build: build/build.exe
 

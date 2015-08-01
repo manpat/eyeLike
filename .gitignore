@@ -1,6 +1,9 @@
-build/*
 bin/*
 .DS_Store
 Makefile
 *.exe
 *.o
+
+UnityTest/Library/*
+UnityTest/ProjectSettings/*
+*.meta

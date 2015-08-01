@@ -22,7 +22,7 @@ void detectAndDisplay( cv::Mat frame );
 void DoStuffWithPupils(cv::Point left, cv::Point right, double height);
 
 /** Global variables */
-cv::String face_cascade_name = "res/haarcascade_frontalface_alt.xml";
+cv::String face_cascade_name = "haarcascade_frontalface_alt.xml";
 cv::CascadeClassifier face_cascade;
 std::string main_window_name = "Capture - Face detection";
 std::string face_window_name = "Capture - Face";
@@ -35,17 +35,45 @@ cv::Mat skinCrCbHist = cv::Mat::zeros(cv::Size(256, 256), CV_8UC1);
  */
 int main( int argc, const char** argv ) {
 	// Network stuff
+	if(argc < 1) {
+		std::cerr << "Missing port" << std::endl;
+		return 1;
+	}
+
 	int port = atoi(argv[1]);
-	std::cout << "Port: " << port << "\n";
+	std::cout << "Port: " << port << std::endl;
+
+	std::string fullName(argv[0]);
+	std::string path;
+	auto lastSlash = fullName.find_last_of("\\/");
+	path = fullName.substr(0, lastSlash+1);
 
 	PacketHandler packetHandler(port);
-	packetHandler.SendPacket(true); // Test
+	std::cout << fullName << " running in " << path << std::endl;
+
+	// while(true){
+	// 	auto packets = packetHandler.ReceivePackets();
+	// 	for(auto& p: packets){
+	// 		std::cout << p << std::endl;
+	// 		if(p == "Ack"){
+	// 			packetHandler.SendPacket("ack ack");
+	// 		}else{
+	// 			std::cout << "Unknown packet: " << p << std::endl;
+	// 			packetHandler.SendPacket("What? " + p);
+	// 		}
+	// 	}
+	// }
+
+	// return 0;
 
 	cv::VideoCapture capture(0);
 	cv::Mat frame;
 
 	// Load the cascades
-	if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade, please change face_cascade_name in source code.\n"); return -1; };
+	if(!face_cascade.load(path + face_cascade_name)){ 
+		printf("--(!)Error loading face cascade, please change face_cascade_name in source code.\n"); 
+		return -1; 
+	};
 
 	cv::namedWindow(main_window_name,CV_WINDOW_NORMAL);
 	cv::moveWindow(main_window_name, 400, 100);
@@ -63,6 +91,16 @@ int main( int argc, const char** argv ) {
 	 // Read the video stream
 	if( capture.isOpened() ) {
 		while( true ) {
+			auto packets = packetHandler.ReceivePackets();
+			for(auto& p: packets){
+				std::cout << p << std::endl;
+				if(p == "Ack"){
+					packetHandler.SendPacket("ack ack ack");
+				}else{
+					packetHandler.SendPacket("idk");
+				}
+			}
+
 			capture.read(frame);
 
 			// mirror it
@@ -80,10 +118,7 @@ int main( int argc, const char** argv ) {
 			imshow(main_window_name,debugImage);
 
 			int c = cv::waitKey(1);
-			if( (char)c == 'c' ) { break; } 
-			if( (char)c == 'f' ) {
-				imwrite("frame.png",frame);
-			}
+			if( (char)c == 'c' ) break;
 		}
 	}
 
@@ -146,7 +181,6 @@ void findEyes(cv::Mat frame_gray, cv::Rect face) {
 	// draw eye centers
 	circle(debugFace, rightPupil, 3, 1234);
 	circle(debugFace, leftPupil, 3, 1234);
-
 
 	//-- Find Eye Corners
 	if (kEnableEyeCorner) {
