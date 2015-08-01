@@ -1,8 +1,9 @@
 #include "PacketHandler.h"
 
-#include <iostream>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
-PacketHandler::PacketHandler(int sock, PCSTR ip)
+PacketHandler::PacketHandler(int port)
 {
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -11,29 +12,32 @@ PacketHandler::PacketHandler(int sock, PCSTR ip)
 		exit(0);
 	}
 
-	PrepareSocket(sock, ip);
+	PrepareSocket(port);
 }
 
 PacketHandler::~PacketHandler()
 {
 }
 
-void PacketHandler::PrepareSocket(int sock, PCSTR ip)
+void PacketHandler::PrepareSocket(int port)
 {
 	m_address.sin_family = AF_INET;
-	m_address.sin_port = htons(sock);
-	inet_pton(AF_INET, ip, &m_address.sin_addr.s_addr);
+	m_address.sin_port = htons(port);
+	m_address.sin_addr.s_addr = INADDR_ANY;
 
-	m_socket = socket(AF_INET, SOCK_DGRAM, 0);
+	m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (m_socket == SOCKET_ERROR)
 	{
 		std::cout << "Error Opening socket: Error " << WSAGetLastError();
 		exit(0);
 	}
 
-	DWORD dwBytesReturned = 0;
-	BOOL bNewBehavior = FALSE;
-	WSAIoctl(m_socket, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL);
+	bind(m_socket, (const sockaddr*)(&m_address), sizeof(m_address));
+
+	setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, "1", 1);
+	// DWORD dwBytesReturned = 0;
+	// BOOL bNewBehavior = FALSE;
+	// WSAIoctl(m_socket, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL);
 }
 
 std::vector<std::vector<char>> PacketHandler::ReceivePackets()
@@ -50,7 +54,7 @@ std::vector<std::vector<char>> PacketHandler::ReceivePackets()
 		struct timeval t;
 		t.tv_sec = 0;
 		t.tv_usec = 0;
-		waiting = select(NULL, &checksockets, NULL, NULL, &t);
+		waiting = select(0, &checksockets, nullptr, nullptr, &t);
 		if (waiting > 0)
 		{
 			int result;

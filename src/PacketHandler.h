@@ -1,19 +1,20 @@
 #ifndef PACKETHANDLER_H
 #define PACKETHANDLER_H
 
-#include "winsock2.h"
-#include "Ws2tcpip.h"
-#include "mswsock.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <mswsock.h>
 
+#include <iostream>
 #include <vector>
 
 class PacketHandler
 {
 public:
-	PacketHandler(int sock, PCSTR ip); //Constructor calls PrepareSocket()
+	PacketHandler(int port); //Constructor calls PrepareSocket()
 	~PacketHandler();
 
-	void PrepareSocket(int socket, PCSTR ip);
+	void PrepareSocket(int port);
 	std::vector<std::vector<char>> ReceivePackets();
 
 	template<typename T>

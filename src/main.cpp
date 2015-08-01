@@ -22,8 +22,6 @@ void detectAndDisplay( cv::Mat frame );
 void DoStuffWithPupils(cv::Point left, cv::Point right, double height);
 
 /** Global variables */
-//-- Note, either copy these two files from opencv/data/haarscascades to your current folder, or change these locations
-// cv::String face_cascade_name = "/usr/local/share/OpenCV/haarcascades/haarcascade_frontalface_alt_tree.xml";
 cv::String face_cascade_name = "res/haarcascade_frontalface_alt.xml";
 cv::CascadeClassifier face_cascade;
 std::string main_window_name = "Capture - Face detection";
@@ -36,7 +34,14 @@ cv::Mat skinCrCbHist = cv::Mat::zeros(cv::Size(256, 256), CV_8UC1);
  * @function main
  */
 int main( int argc, const char** argv ) {
-	cv::VideoCapture capture(-1);
+	// Network stuff
+	int port = atoi(argv[1]);
+	std::cout << "Port: " << port << "\n";
+
+	PacketHandler packetHandler(port);
+	packetHandler.SendPacket(true); // Test
+
+	cv::VideoCapture capture(0);
 	cv::Mat frame;
 
 	// Load the cascades
@@ -54,15 +59,6 @@ int main( int argc, const char** argv ) {
 	createCornerKernels();
 	ellipse(skinCrCbHist, cv::Point(113, 155.6), cv::Size(23.4, 15.2),
 					43.0, 0.0, 360.0, cv::Scalar(255, 255, 255), -1);
-
-	// Network stuff
-	PCSTR IP_ADDRESS = argv[0];
-	int SOCKET_ADDRESS = atoi(argv[1]);
-	std::cout << "IP: " << IP_ADDRESS << ", Socket: " << SOCKET_ADDRESS << "\n";
-
-	PacketHandler packetHandler(SOCKET_ADDRESS, IP_ADDRESS);
-
-	packetHandler.SendPacket(true); // Test
 
 	 // Read the video stream
 	if( capture.isOpened() ) {
