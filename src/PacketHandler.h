@@ -19,10 +19,16 @@ public:
 	std::vector<std::string> ReceivePackets();
 
 	template<typename T>
-	void SendPacket(const T& packet)
-	{
+	void SendPacket(const T& packet) {
 		int result;
 		result = sendto(m_socket, (char*)&packet, sizeof(packet), 0, (SOCKADDR*)&m_prevrecv, sizeof(m_prevrecv));
+		if (result == SOCKET_ERROR)
+			std::cout << "sendto() failed: Error " << WSAGetLastError() << std::endl;
+	}
+
+	void SendPacket(const std::string& packet){
+		int result;
+		result = sendto(m_socket, packet.data(), packet.size(), 0, (SOCKADDR*)&m_prevrecv, sizeof(m_prevrecv));
 		if (result == SOCKET_ERROR)
 			std::cout << "sendto() failed: Error " << WSAGetLastError() << std::endl;
 	}

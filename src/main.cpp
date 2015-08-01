@@ -3,9 +3,10 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <iostream>
-#include <queue>
-#include <stdio.h>
-#include <math.h>
+#include <string>
+#include <sstream>
+#include <cstdio>
+#include <cmath>
 
 #include "constants.h"
 #include "findEyeCenter.h"
@@ -13,12 +14,10 @@
 
 #include "PacketHandler.h"
 
-/** Constants **/
-
-
 /** Function Headers */
 void detectAndDisplay( cv::Mat frame );
 
+double GetVal();
 void DoStuffWithPupils(cv::Point left, cv::Point right, double height);
 
 /** Global variables */
@@ -37,7 +36,7 @@ int main( int argc, const char** argv ) {
 	// Network stuff
 	if(argc < 1) {
 		std::cerr << "Missing port" << std::endl;
-		return 1;
+		return -1;
 	}
 
 	int port = atoi(argv[1]);
@@ -51,51 +50,47 @@ int main( int argc, const char** argv ) {
 	PacketHandler packetHandler(port);
 	std::cout << fullName << " running in " << path << std::endl;
 
-	// while(true){
-	// 	auto packets = packetHandler.ReceivePackets();
-	// 	for(auto& p: packets){
-	// 		std::cout << p << std::endl;
-	// 		if(p == "Ack"){
-	// 			packetHandler.SendPacket("ack ack");
-	// 		}else{
-	// 			std::cout << "Unknown packet: " << p << std::endl;
-	// 			packetHandler.SendPacket("What? " + p);
-	// 		}
-	// 	}
-	// }
-
-	// return 0;
-
 	cv::VideoCapture capture(0);
 	cv::Mat frame;
 
+	auto faceCascadePath = path + face_cascade_name;
+
 	// Load the cascades
-	if(!face_cascade.load(path + face_cascade_name)){ 
-		printf("--(!)Error loading face cascade, please change face_cascade_name in source code.\n"); 
+	if(!face_cascade.load(faceCascadePath)){ 
+		std::cout 
+			<< "Error loading face cascade (" 
+			<< faceCascadePath << ")"
+			<< std::endl;
 		return -1; 
 	};
 
-	cv::namedWindow(main_window_name,CV_WINDOW_NORMAL);
-	cv::moveWindow(main_window_name, 400, 100);
-	cv::namedWindow(face_window_name,CV_WINDOW_NORMAL);
-	cv::moveWindow(face_window_name, 10, 100);
-	cv::namedWindow("Right Eye",CV_WINDOW_NORMAL);
-	cv::moveWindow("Right Eye", 10, 600);
-	cv::namedWindow("Left Eye",CV_WINDOW_NORMAL);
-	cv::moveWindow("Left Eye", 400, 600);
+	if(showWindows){
+		cv::namedWindow(main_window_name,CV_WINDOW_NORMAL);
+		cv::moveWindow(main_window_name, 400, 100);
+		cv::namedWindow(face_window_name,CV_WINDOW_NORMAL);
+		cv::moveWindow(face_window_name, 10, 100);
+		cv::namedWindow("Right Eye",CV_WINDOW_NORMAL);
+		cv::moveWindow("Right Eye", 10, 600);
+		cv::namedWindow("Left Eye",CV_WINDOW_NORMAL);
+		cv::moveWindow("Left Eye", 400, 600);
+	}
 
 	createCornerKernels();
 	ellipse(skinCrCbHist, cv::Point(113, 155.6), cv::Size(23.4, 15.2),
 					43.0, 0.0, 360.0, cv::Scalar(255, 255, 255), -1);
+
 
 	 // Read the video stream
 	if( capture.isOpened() ) {
 		while( true ) {
 			auto packets = packetHandler.ReceivePackets();
 			for(auto& p: packets){
-				std::cout << p << std::endl;
-				if(p == "Ack"){
+				if(p == "ack"){
 					packetHandler.SendPacket("ack ack ack");
+				}else if(p == "data"){
+					std::stringstream ss;
+					ss << GetVal();
+					packetHandler.SendPacket(ss.str());
 				}else{
 					packetHandler.SendPacket("idk");
 				}
@@ -105,7 +100,7 @@ int main( int argc, const char** argv ) {
 
 			// mirror it
 			cv::flip(frame, frame, 1);
-			frame.copyTo(debugImage);
+			if(showWindows) frame.copyTo(debugImage);
 
 			// Apply the classifier to the frame
 			if( !frame.empty() ) {
@@ -115,7 +110,7 @@ int main( int argc, const char** argv ) {
 				break;
 			}
 
-			imshow(main_window_name,debugImage);
+			if(showWindows) imshow(main_window_name,debugImage);
 
 			int c = cv::waitKey(1);
 			if( (char)c == 'c' ) break;
@@ -172,6 +167,7 @@ void findEyes(cv::Mat frame_gray, cv::Rect face) {
 	rectangle(debugFace,rightRightCornerRegion,200);
 
 	DoStuffWithPupils(leftPupil, rightPupil, (leftLeftCornerRegion.height + rightRightCornerRegion.height));
+	if(!showWindows) return;
 
 	// change eye centers to face coordinates
 	rightPupil.x += rightEyeRegion.x;
@@ -205,26 +201,6 @@ void findEyes(cv::Mat frame_gray, cv::Rect face) {
 	imshow(face_window_name, faceROI);
 }
 
-
-cv::Mat findSkin (cv::Mat &frame) {
-	cv::Mat input;
-	cv::Mat output = cv::Mat(frame.rows,frame.cols, CV_8U);
-
-	cvtColor(frame, input, CV_BGR2YCrCb);
-
-	for (int y = 0; y < input.rows; ++y) {
-		const cv::Vec3b *Mr = input.ptr<cv::Vec3b>(y);
-		cv::Vec3b *Or = frame.ptr<cv::Vec3b>(y);
-		for (int x = 0; x < input.cols; ++x) {
-			cv::Vec3b ycrcb = Mr[x];
-			if(skinCrCbHist.at<uchar>(ycrcb[1], ycrcb[2]) == 0) {
-				Or[x] = cv::Vec3b(0,0,0);
-			}
-		}
-	}
-	return output;
-}
-
 /**
  * @function detectAndDisplay
  */
@@ -243,12 +219,13 @@ void detectAndDisplay( cv::Mat frame ) {
 	// cv::pow(frame_gray, CV_64F, frame_gray);
 	//-- Detect faces
 	face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE|CV_HAAR_FIND_BIGGEST_OBJECT, cv::Size(150, 150) );
-	// findSkin(debugImage);
 
-	for( int i = 0; i < faces.size(); i++ )
-	{
-		rectangle(debugImage, faces[i], 1234);
+	if(showWindows){
+		for( int i = 0; i < faces.size(); i++ ) {
+			rectangle(debugImage, faces[i], 1234);
+		}
 	}
+
 	//-- Show what you got
 	if (faces.size() > 0) {
 		findEyes(frame_gray, faces[0]);
@@ -265,10 +242,14 @@ void DoStuffWithPupils(cv::Point left, cv::Point right, double height){
 	double diff = (gavg - prev);
 	diff *= diff;
 
-	const double ratio = 3.0; 
+	const double ratio = 5.0; 
 	avgdiff = (diff + avgdiff*(ratio-1.0))/ratio;
 
 	prev = gavg;
 	if(avgdiff > 20)
 		fprintf(stderr, "Diff: %f\n", avgdiff);
+}
+
+double GetVal(){
+	return (gavg-50.0)/50.0;
 }

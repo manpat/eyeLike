@@ -22,4 +22,5 @@ build/build.exe: $(OBJ)
 	g++ -std=c++11 $(INCLUDE) -c $^ -o $@
 
 run: build
-	build/build.exe 1337
+	@echo "Run from unity plox"
+	@# build/build.exe 1337
