@@ -10,7 +10,7 @@ public class Test : MonoBehaviour {
 
 	void Update () {
 		var p = transform.position;
-		p.y = (float)et.data * 3f;
+		p.y = (float)et.adjustedData * 3f;
 		transform.position = p;
 	}
 }

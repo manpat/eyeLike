@@ -87,20 +87,20 @@ int main( int argc, const char** argv ) {
 					break;
 				case PacketType::GetData:
 					if(faceCaptured)
-						packetHandler.SendPacket(Packet{PacketType::Data, GetVal()});
+						packetHandler.SendPacket(Packet{PacketType::Data, (float)GetVal()});
 					else
 						packetHandler.SendPacket(Packet{PacketType::CantFindFace, 0.0});
 
 					break;
 				case PacketType::SetSmooth:
-					smoothingRatio = std::max(1.0, p.data);
-					packetHandler.SendPacket(Packet{PacketType::SetSmooth, smoothingRatio});
+					smoothingRatio = std::max(1.0, (double)p.data+1.0);
+					packetHandler.SendPacket(Packet{PacketType::SetSmooth, (float)smoothingRatio-1.f});
 					break;
 				case PacketType::EnableDebug:
 					showWindows = true;
 					break;
 				default:
-					std::cout << "Server recieved unknown packet type " << (byte)p.type << std::endl;
+					std::cout << "Server received unknown packet type " << (byte)p.type << std::endl;
 				}
 			}
 

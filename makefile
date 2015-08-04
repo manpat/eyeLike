@@ -13,6 +13,7 @@ pbuild:
 	@make -j 4 build
 
 build: build/build.exe
+	cp build/build.exe UnityTest/EyeFinder/eyeFinder.exe
 
 build/build.exe: $(OBJ)
 	@[[ -d build ]] || mkdir build

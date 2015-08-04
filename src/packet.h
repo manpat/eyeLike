@@ -16,7 +16,7 @@ enum class PacketType : byte {
 #pragma pack(push, 1)
 struct Packet {
 	PacketType type;
-	double data;
+	float data;
 };
 #pragma pack(pop)
 

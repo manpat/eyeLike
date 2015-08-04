@@ -6,4 +6,5 @@ Makefile
 
 UnityTest/Library/*
 UnityTest/ProjectSettings/*
+UnityTest/Temp/*
 *.meta

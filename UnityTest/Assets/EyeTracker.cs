@@ -7,7 +7,7 @@ using System.Net.Sockets;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-public enum PacketType : byte {
+enum PacketType : byte {
 	Ack = 1,
 	ServAck,
 	SetSmooth,
@@ -20,37 +20,88 @@ public enum PacketType : byte {
 }
 
 [StructLayout(LayoutKind.Sequential, Pack=1)]
-public struct Packet {
+struct Packet {
 	public PacketType type;
-	public double data;
+	public float data;
 }
 
 public class EyeTracker : MonoBehaviour {
-	public bool isLooking;
-	public double data;
+	// A rough estimation of whether or not the user is NOT looking down
+	public bool isLooking = false;
 
-	public int PORT = 1300;
+	// The latest data received from the server (after smoothing)
+	public float rawData;
+
+	// The adjusted version of the latest data. 
+	//	This is what should be used for calculations
+	public float adjustedData;
+
+	// Whether or not the server can see a face
+	public bool serverCanFindFace = false;
+
+	// The threshold, below which the user is assumed to be looking down
+	public float lookingThreshold = -0.2f;
+
+	// The factor by which adjustedData is adjusted when rawData is < 0
+	//	The reason for this is that the server is less sensitive to looking
+	//	down than looking up
+	public float lookingDownFactor = 20f;
+
+	// On startup, this sets the server-side smoothing ratio
+	//	A value of 0f would result in no smoothing.
+	//	Setting after startup does nothing, for that use SetSmoothing()
+	[SerializeField] float serverSmoothing = 5f;
+
+	// On startup, determines whether or not the server
+	//	should open debug windows. Good for getting lighting conditions
+	//	right. After startup, this can be enabled with EnableDebugWindows()
+	[SerializeField] bool showDebugWindows = false;
+
+	// Specifies the path to the server executable, from project root
+	//	(the folder where the Assets/ and ProjectSettings/ folders are)
+	[SerializeField] string pathToServer = "../build/build.exe";
+
+	// The port to start the server on. Should be changed if something else
+	//	is already running on a port.
+	//	Note: Must be above 1024 and less than 65535
+	[SerializeField] ushort port = 13370;
+
+	// This is set once the server has started and has begun acknowledging
+	//	requests for data
+	[SerializeField] bool hasAcked = false;
+	
+	float ackTimeout = 0f;
+	bool requestSent = false;
 
 	Socket client;
 	IPEndPoint ep;
 
 	Process proc;
 
-	public bool hasAcked = false;
-	public float ackTimeout = 0f;
-	public bool requestSent = false;
-
 	delegate void RequestDelegate(Packet data);
+
+	public void SetSmoothing(float smooth = 5f){
+		serverSmoothing = smooth;
+		Request(PacketType.SetSmooth, smooth, r => {
+			if(r.type == PacketType.SetSmooth){
+				print("Server smoothing set to " + r.data.ToString());
+			}
+		});
+	}
+
+	public void EnableDebugWindows(){
+		Send(PacketType.EnableDebug);
+	}
 
 	void Start () {
 		var IP = IPAddress.Parse("127.0.0.1");
+		ep = new IPEndPoint(IP, port);
 		
 		client = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-		ep = new IPEndPoint(IP, PORT);
 
 		proc = new Process();
-		proc.StartInfo.FileName = "../build/build.exe";
-		proc.StartInfo.Arguments = PORT.ToString();
+		proc.StartInfo.FileName = pathToServer;
+		proc.StartInfo.Arguments = port.ToString();
 		proc.StartInfo.RedirectStandardOutput = true;
 		proc.StartInfo.UseShellExecute = false;
 		proc.StartInfo.CreateNoWindow = true;
@@ -73,7 +124,8 @@ public class EyeTracker : MonoBehaviour {
 					print("Server didn't ack correctly");
 				}else{
 					hasAcked = true;
-					Send(PacketType.EnableDebug);
+					if(showDebugWindows) EnableDebugWindows();
+					SetSmoothing(serverSmoothing);
 				}
 			});
 		}
@@ -82,15 +134,22 @@ public class EyeTracker : MonoBehaviour {
 			requestSent = true;
 
 			Request(PacketType.GetData, d => {
-				if(d.type != PacketType.Data){
+				if(d.type == PacketType.CantFindFace){
+					serverCanFindFace = false;
+
+				}else if(d.type != PacketType.Data){
 					print("Server didn't respond correctly");
+
 				}else{
-					data = d.data;
-					if(data < 0f){
-						data *= -data * 20f;
+					serverCanFindFace = true;
+
+					rawData = d.data;
+					adjustedData = rawData;
+					if(adjustedData < 0f){
+						adjustedData *= -adjustedData * lookingDownFactor;
 					}
 
-					isLooking = data >= -0.2f;
+					isLooking = adjustedData >= lookingThreshold;
 				}
 
 				requestSent = false;
@@ -103,9 +162,9 @@ public class EyeTracker : MonoBehaviour {
 	}
 
 	void Request(PacketType type, RequestDelegate rdg){
-		Request(type, 0.0, rdg);
+		Request(type, 0f, rdg);
 	}
-	void Request(PacketType type, double data, RequestDelegate rdg){
+	void Request(PacketType type, float data, RequestDelegate rdg){
 		Send(type, data);
 
 		int packetSize = Marshal.SizeOf(typeof(Packet));
@@ -121,7 +180,7 @@ public class EyeTracker : MonoBehaviour {
 		}, null);
 	}
 
-	void Send(PacketType type, double data = 0.0){
+	void Send(PacketType type, float data = 0f){
 		Packet tosend;
 		tosend.type = type; tosend.data = data;
 		client.SendTo(GetBytes(tosend), ep);
