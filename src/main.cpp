@@ -27,16 +27,15 @@ std::string main_window_name = "Capture - Face detection";
 std::string face_window_name = "Capture - Face";
 cv::RNG rng(12345);
 cv::Mat debugImage;
-cv::Mat skinCrCbHist = cv::Mat::zeros(cv::Size(256, 256), CV_8UC1);
 
-/**
- * @function main
- */
+double smoothingRatio = 5.0; 
+bool faceCaptured = false;
+
 int main( int argc, const char** argv ) {
 	// Network stuff
 	if(argc < 1) {
 		std::cerr << "Missing port" << std::endl;
-		return -1;
+		return 1;
 	}
 
 	int port = atoi(argv[1]);
@@ -76,23 +75,32 @@ int main( int argc, const char** argv ) {
 	}
 
 	createCornerKernels();
-	ellipse(skinCrCbHist, cv::Point(113, 155.6), cv::Size(23.4, 15.2),
-					43.0, 0.0, 360.0, cv::Scalar(255, 255, 255), -1);
-
 
 	 // Read the video stream
 	if( capture.isOpened() ) {
 		while( true ) {
 			auto packets = packetHandler.ReceivePackets();
 			for(auto& p: packets){
-				if(p == "ack"){
-					packetHandler.SendPacket("ack ack ack");
-				}else if(p == "data"){
-					std::stringstream ss;
-					ss << GetVal();
-					packetHandler.SendPacket(ss.str());
-				}else{
-					packetHandler.SendPacket("idk");
+				switch(p.type){
+				case PacketType::Ack:
+					packetHandler.SendPacket(Packet{PacketType::ServAck, 0.0});
+					break;
+				case PacketType::GetData:
+					if(faceCaptured)
+						packetHandler.SendPacket(Packet{PacketType::Data, GetVal()});
+					else
+						packetHandler.SendPacket(Packet{PacketType::CantFindFace, 0.0});
+
+					break;
+				case PacketType::SetSmooth:
+					smoothingRatio = std::max(1.0, p.data);
+					packetHandler.SendPacket(Packet{PacketType::SetSmooth, smoothingRatio});
+					break;
+				case PacketType::EnableDebug:
+					showWindows = true;
+					break;
+				default:
+					std::cout << "Server recieved unknown packet type " << (byte)p.type << std::endl;
 				}
 			}
 
@@ -206,18 +214,11 @@ void findEyes(cv::Mat frame_gray, cv::Rect face) {
  */
 void detectAndDisplay( cv::Mat frame ) {
 	std::vector<cv::Rect> faces;
-	//cv::Mat frame_gray;
 
 	std::vector<cv::Mat> rgbChannels(3);
 	cv::split(frame, rgbChannels);
 	cv::Mat frame_gray = rgbChannels[2];
 
-	// equalizeHist(frame_gray, frame_gray);
-
-	//cvtColor( frame, frame_gray, CV_BGR2GRAY );
-	//equalizeHist( frame_gray, frame_gray );
-	// cv::pow(frame_gray, CV_64F, frame_gray);
-	//-- Detect faces
 	face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE|CV_HAAR_FIND_BIGGEST_OBJECT, cv::Size(150, 150) );
 
 	if(showWindows){
@@ -229,6 +230,9 @@ void detectAndDisplay( cv::Mat frame ) {
 	//-- Show what you got
 	if (faces.size() > 0) {
 		findEyes(frame_gray, faces[0]);
+		faceCaptured = true;
+	}else{
+		faceCaptured = false;
 	}
 }
 
@@ -242,8 +246,7 @@ void DoStuffWithPupils(cv::Point left, cv::Point right, double height){
 	double diff = (gavg - prev);
 	diff *= diff;
 
-	const double ratio = 5.0; 
-	avgdiff = (diff + avgdiff*(ratio-1.0))/ratio;
+	avgdiff = (diff + avgdiff*(smoothingRatio-1.0))/smoothingRatio;
 
 	prev = gavg;
 	if(avgdiff > 20)

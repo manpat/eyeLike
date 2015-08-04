@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 
+#include "packet.h"
+
 class PacketHandler
 {
 public:
@@ -16,7 +18,7 @@ public:
 	~PacketHandler();
 
 	void PrepareSocket(int port);
-	std::vector<std::string> ReceivePackets();
+	std::vector<Packet> ReceivePackets();
 
 	template<typename T>
 	void SendPacket(const T& packet) {
@@ -26,12 +28,12 @@ public:
 			std::cout << "sendto() failed: Error " << WSAGetLastError() << std::endl;
 	}
 
-	void SendPacket(const std::string& packet){
-		int result;
-		result = sendto(m_socket, packet.data(), packet.size(), 0, (SOCKADDR*)&m_prevrecv, sizeof(m_prevrecv));
-		if (result == SOCKET_ERROR)
-			std::cout << "sendto() failed: Error " << WSAGetLastError() << std::endl;
-	}
+	// void SendPacket(const std::string& packet){
+	// 	int result;
+	// 	result = sendto(m_socket, packet.data(), packet.size(), 0, (SOCKADDR*)&m_prevrecv, sizeof(m_prevrecv));
+	// 	if (result == SOCKET_ERROR)
+	// 		std::cout << "sendto() failed: Error " << WSAGetLastError() << std::endl;
+	// }
 
 private:
 	sockaddr_in m_prevrecv;

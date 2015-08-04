@@ -38,14 +38,12 @@ void PacketHandler::PrepareSocket(int port)
 	// WSAIoctl(m_socket, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL);
 }
 
-std::vector<std::string> PacketHandler::ReceivePackets()
-{
-	std::vector<std::string> receivedData;
-	static char buffer[10000];
+std::vector<Packet> PacketHandler::ReceivePackets() {
+	std::vector<Packet> receivedData;
+	static Packet packet;
 
 	int waiting;
-	do
-	{
+	do {
 		fd_set checksockets;
 		checksockets.fd_count = 1;
 		checksockets.fd_array[0] = m_socket;
@@ -53,22 +51,23 @@ std::vector<std::string> PacketHandler::ReceivePackets()
 		t.tv_sec = 0;
 		t.tv_usec = 0;
 		waiting = select(m_socket, &checksockets, nullptr, nullptr, &t);
-		if (waiting > 0)
-		{
+		if (waiting > 0) {
 			int result;
 			int length = sizeof(sockaddr_in);
-			result = recvfrom(m_socket,	buffer, 10000, 0, (SOCKADDR*)&m_prevrecv, &length);
+			result = recvfrom(m_socket,	reinterpret_cast<char*>(&packet), sizeof(Packet), 0, (SOCKADDR*)&m_prevrecv, &length);
 
-			if (result == SOCKET_ERROR)
-			{
+			if (result == SOCKET_ERROR){
 				auto err = WSAGetLastError();
 				if(err != WSAECONNRESET)
 					std::cout << "recvfrom() failed: Error " << err << std::endl;
-			}
-			else
-			{
-				std::string packetData(buffer, result);
-				receivedData.push_back(packetData);
+
+			}else{
+				if(result != sizeof(Packet)){
+					std::cout << "Server recieved malformed packet of size " << result << std::endl;
+					continue;
+				}
+
+				receivedData.push_back(packet);
 			}
 		}
 	} while (waiting);

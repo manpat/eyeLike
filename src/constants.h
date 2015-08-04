@@ -28,6 +28,6 @@ const float kPostProcessThreshold = 0.97;
 // Eye Corner
 const bool kEnableEyeCorner = false;
 
-static constexpr bool showWindows = false;
+static bool showWindows = false;
 
 #endif

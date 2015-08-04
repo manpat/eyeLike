@@ -1,16 +1,35 @@
 ﻿using UnityEngine;
-using System.Collections;
+using System;
 using System.Net;
+using System.Text;
+using System.Collections;
 using System.Net.Sockets;
 using System.Diagnostics;
-using System.Text;
+using System.Runtime.InteropServices;
+
+public enum PacketType : byte {
+	Ack = 1,
+	ServAck,
+	SetSmooth,
+	GetData,
+	Data,
+
+	EnableDebug,
+
+	CantFindFace,
+}
+
+[StructLayout(LayoutKind.Sequential, Pack=1)]
+public struct Packet {
+	public PacketType type;
+	public double data;
+}
 
 public class EyeTracker : MonoBehaviour {
 	public bool isLooking;
 	public double data;
 
 	public int PORT = 1300;
-	IPAddress IP;
 
 	Socket client;
 	IPEndPoint ep;
@@ -19,13 +38,12 @@ public class EyeTracker : MonoBehaviour {
 
 	public bool hasAcked = false;
 	public float ackTimeout = 0f;
-
 	public bool requestSent = false;
 
-	delegate void RequestDelegate(string data);
+	delegate void RequestDelegate(Packet data);
 
 	void Start () {
-		IP = IPAddress.Parse("127.0.0.1");
+		var IP = IPAddress.Parse("127.0.0.1");
 		
 		client = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 		ep = new IPEndPoint(IP, PORT);
@@ -50,22 +68,30 @@ public class EyeTracker : MonoBehaviour {
 		ackTimeout -= Time.deltaTime;
 		if(!hasAcked && ackTimeout <= 0f){
 			ackTimeout = 2f;
-			Request("ack", d => {
-				print(d);
-				hasAcked = true;
+			Request(PacketType.Ack, d => {
+				if(d.type != PacketType.ServAck){
+					print("Server didn't ack correctly");
+				}else{
+					hasAcked = true;
+					Send(PacketType.EnableDebug);
+				}
 			});
 		}
 
 		if(hasAcked && !requestSent){
 			requestSent = true;
 
-			Request("data", d => {
-				data = System.Convert.ToDouble(d);
-				if(data < 0f){
-					data *= -data * 20f;
-				}
+			Request(PacketType.GetData, d => {
+				if(d.type != PacketType.Data){
+					print("Server didn't respond correctly");
+				}else{
+					data = d.data;
+					if(data < 0f){
+						data *= -data * 20f;
+					}
 
-				isLooking = data >= -0.2f;
+					isLooking = data >= -0.2f;
+				}
 
 				requestSent = false;
 			});
@@ -76,13 +102,53 @@ public class EyeTracker : MonoBehaviour {
 		if(!proc.HasExited) proc.CloseMainWindow();
 	}
 
-	void Request(string data, RequestDelegate rdg){
-		client.SendTo(Encoding.UTF8.GetBytes(data), ep);
+	void Request(PacketType type, RequestDelegate rdg){
+		Request(type, 0.0, rdg);
+	}
+	void Request(PacketType type, double data, RequestDelegate rdg){
+		Send(type, data);
 
-		var buffer = new byte[128];
-		client.BeginReceive(buffer, 0, 128, 0, ar => {
+		int packetSize = Marshal.SizeOf(typeof(Packet));
+		var buffer = new byte[packetSize];
+		client.BeginReceive(buffer, 0, packetSize, 0, ar => {
 			var read = client.EndReceive(ar);
-			rdg(Encoding.UTF8.GetString(buffer, 0, read));
+			if(read != packetSize){
+				print("Received malformed packet of size "+read.ToString());
+				return;
+			}
+
+			rdg(GetPacket(buffer));
 		}, null);
+	}
+
+	void Send(PacketType type, double data = 0.0){
+		Packet tosend;
+		tosend.type = type; tosend.data = data;
+		client.SendTo(GetBytes(tosend), ep);
+	}
+
+	static byte[] GetBytes(Packet str) {
+		int size = Marshal.SizeOf(str);
+		byte[] arr = new byte[size];
+
+		IntPtr ptr = Marshal.AllocHGlobal(size);
+		Marshal.StructureToPtr(str, ptr, true);
+		Marshal.Copy(ptr, arr, 0, size);
+		Marshal.FreeHGlobal(ptr);
+		return arr;
+	}
+
+	static Packet GetPacket(byte[] arr) {
+		Packet str;
+
+		int size = Marshal.SizeOf(typeof(Packet));
+		IntPtr ptr = Marshal.AllocHGlobal(size);
+
+		Marshal.Copy(arr, 0, ptr, size);
+
+		str = (Packet)Marshal.PtrToStructure(ptr, typeof(Packet));
+		Marshal.FreeHGlobal(ptr);
+
+		return str;
 	}
 }
